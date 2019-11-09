@@ -10,17 +10,39 @@ const Battery = 0
 const AC = 1
 range Power_mode = Battery .. AC
 
-// Power model
-POWER_SYSTEM = POWER[Battery][Switch_off],
-POWER[b: Power_mode][s: Switch_status] = (
-		when (s == Switch_off) power_on -> POWER[b][Switch_on]
+// Battery level
+const Empty = 0
+const Low = 1
+const Full = 2
+range Battery_level = Empty .. Full
+
+// Power system model
+POWER_SYSTEM = POWER[Battery][Switch_off][Full],
+POWER[b: Power_mode][s: Switch_status][l: Battery_level] = (
+		when (s == Switch_off && l > Empty) power_on -> POWER[b][Switch_on][l]
 		|
-		when (s == Switch_on) power_off -> POWER[b][Switch_off]
+		when (s == Switch_on) power_off -> POWER[b][Switch_off][l]
 		|
-		when (b == Battery) plug_in -> POWER[AC][s]
+		when (b == Battery) plug_in -> POWER[AC][s][l]
 		|
-		when (b == AC) plug_out -> POWER[Battery][s]
+		when (b == AC) plug_out -> POWER[Battery][s][l]
+		|
+		when (b == Battery && l > Empty && s == Switch_on) discharge -> POWER[Battery][s][l - 1]
+		|
+		when (b == Battery && l == Empty && s == Switch_on) power_off -> POWER[Battery][Switch_off][l]
+		|
+		when (b == AC && l < Full) charge -> POWER[AC][s][l + 1]
 ).
+
+
+//property POWERCHECK = BATTERYLEVEL[Battery][Switch_off][Full],
+//BATTERYLEVEL[b: Power_mode][s: Switch_status][l: Battery_level] = (
+//		when (b == Battery && s == Switch_off && l == Empty) plug_in -> BATTERYLEVEL[AC][s][l]
+//		|
+//		when ()
+//).
+
+//||CHECK_POWER = (POWER_SYSTEM || POWERCHECK).
 
 
 
