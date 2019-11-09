@@ -31,9 +31,9 @@ POWER[b: Power_mode][s: Switch_status] = (
 /** alarm system **/
 
 // Alarm status
-const Alarm_slience = 0
-const Alarm_ring = 1
-range Alarm_status = Alarm_slience .. Alarm_ring
+const Alarm_activated = 0    // Alarm currently active
+const Alarm_silenced  = 1    // Alarm currently inactive
+range Alarm_state = Alarm_activated .. Alarm_silenced
 
 // Alarm reason
 const ReasonA = 0
@@ -53,10 +53,10 @@ ALARM = (
 		power_off -> ALARM
 ),
 
-ALARM_SYSTEM[a: Alarm_status][r: Alarm_reason] = (
-		when (a == Alarm_ring) slience_alarm -> ALARM_SYSTEM[Alarm_slience][r]
+ALARM_SYSTEM[a: Alarm_state][r: Alarm_reason] = (
+		when (a == Alarm_activated) silence_alarm -> ALARM_SYSTEM[Alarm_silenced][r]
 		|
-		when (a == Alarm_ring) keep_ring -> ALARM_SYSTEM[a][r]
+		when (a == Alarm_activated) sound_alarm -> ALARM_SYSTEM[a][r]
 		// reason solved, ALARM_SYSTEM should down, trun back to ALARM
 		| // power is off, alarm stop
 		power_off -> ALARM
@@ -66,6 +66,25 @@ ALARM_SYSTEM[a: Alarm_status][r: Alarm_reason] = (
 
 /** user interface **/
 
+const ParamsNotSet = 2    // pump parameters not set yet
+const ParamsSet    = 3    // pump parameters already set
 
+range ParamsStateT = ParamsNotSet .. ParamsSet
+
+//
+// Locked/unlocked states of a line with respect to a pump channel
+//
+const LineUnlocked = 4  // line not locked into a pump channel 
+const LineLocked   = 5  // line locked into a pump channel
+
+range LineLockStateT = LineUnlocked .. LineLocked
+
+//
+// Locked/unlocked states of the pump unit
+//
+const UnitUnlocked = 6  // the keypad of the pump is not locked
+const UnitLocked   = 7  // the keypad of the pump is locked
+
+range UnitLockStateT = UnitUnlocked .. UnitLocked
 
 
