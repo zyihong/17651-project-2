@@ -1,35 +1,35 @@
 /** power system **/
 
 // Switch status
-const Switch_off = 0
-const Switch_on = 1
-range Switch_status = Switch_off .. Switch_on
+const SwitchOff = 0
+const SwitchOn = 1
+range SwitchStatus = SwitchOff .. SwitchOn
 
 // Power mode
 const Battery = 0
 const AC = 1
-range Power_mode = Battery .. AC
+range PowerMode = Battery .. AC
 
 // Battery level
 const Empty = 0
 const Low = 1
 const Full = 2
-range Battery_level = Empty .. Full
+range BatteryLevel = Empty .. Full
 
 // Power system model
-POWER_SYSTEM = POWER[Battery][Switch_off][Full],
-POWER[b: Power_mode][s: Switch_status][l: Battery_level] = (
-		when (s == Switch_off && l > Empty) power_on -> POWER[b][Switch_on][l]
+POWER_SYSTEM = POWER[Battery][SwitchOff][Full],
+POWER[b: PowerMode][s: SwitchStatus][l: BatteryLevel] = (
+		when (s == SwitchOff && l > Empty) power_on -> POWER[b][SwitchOn][l]
 		|
-		when (s == Switch_on) power_off -> POWER[b][Switch_off][l]
+		when (s == SwitchOn) power_off -> POWER[b][SwitchOff][l]
 		|
 		when (b == Battery) plug_in -> POWER[AC][s][l]
 		|
 		when (b == AC) plug_out -> POWER[Battery][s][l]
 		|
-		when (b == Battery && l > Empty && s == Switch_on) discharge -> POWER[Battery][s][l - 1]
+		when (b == Battery && l > Empty && s == SwitchOn) discharge -> POWER[Battery][s][l - 1]
 		|
-		when (b == Battery && l == Empty && s == Switch_on) power_off -> POWER[Battery][Switch_off][l]
+		when (b == Battery && l == Empty && s == SwitchOn) power_off -> POWER[Battery][SwitchOff][l]
 		|
 		when (b == AC && l < Full) charge -> POWER[AC][s][l + 1]
 ).
@@ -53,15 +53,15 @@ POWER[b: Power_mode][s: Switch_status][l: Battery_level] = (
 /** alarm system **/
 
 // Alarm status
-const Alarm_activated = 0    // Alarm currently active
-const Alarm_silenced  = 1    // Alarm currently inactive
-range Alarm_state = Alarm_activated .. Alarm_silenced
+const AlarmActivated = 0    // Alarm currently active
+const AlarmSilenced  = 1    // Alarm currently inactive
+range AlarmStateT = AlarmActivated .. AlarmSilenced
 
 // Alarm reason
 const ReasonA = 0
 const ReasonB = 1
 const ReasonC = 2
-range Alarm_reason = ReasonA .. ReasonC
+range AlarmReason = ReasonA .. ReasonC
 
 // Alarm model
 ALARM = (
@@ -75,10 +75,10 @@ ALARM = (
 		power_off -> ALARM
 ),
 
-ALARM_SYSTEM[a: Alarm_state][r: Alarm_reason] = (
-		when (a == Alarm_activated) silence_alarm -> ALARM_SYSTEM[Alarm_silenced][r]
+ALARM_SYSTEM[a: AlarmStateT][r: AlarmReason] = (
+		when (a == AlarmActivated) silence_alarm -> ALARM_SYSTEM[AlarmSilenced][r]
 		|
-		when (a == Alarm_activated) sound_alarm -> ALARM_SYSTEM[a][r]
+		when (a == AlarmActivated) sound_alarm -> ALARM_SYSTEM[a][r]
 		// reason solved, ALARM_SYSTEM should down, trun back to ALARM
 		| // power is off, alarm stop
 		power_off -> ALARM
@@ -93,20 +93,44 @@ const ParamsSet    = 3    // pump parameters already set
 
 range ParamsStateT = ParamsNotSet .. ParamsSet
 
-//
 // Locked/unlocked states of a line with respect to a pump channel
-//
 const LineUnlocked = 4  // line not locked into a pump channel 
 const LineLocked   = 5  // line locked into a pump channel
 
 range LineLockStateT = LineUnlocked .. LineLocked
 
-//
 // Locked/unlocked states of the pump unit
-//
 const UnitUnlocked = 6  // the keypad of the pump is not locked
 const UnitLocked   = 7  // the keypad of the pump is locked
 
 range UnitLockStateT = UnitUnlocked .. UnitLocked
 
+// User interface system
+USERINTERFACE = (
+	power_on -> SETUP[ParamsNotSet][LineUnlocked][UnitUnlocked]
+),
 
+SETUP[params:ParamsStateT][lineLock:LineLockStateT][unitLock:] = 
+(
+    unplug -> UNPLUGGED
+    |
+    turn_off -> POWER_OFF
+    |
+    when (params == ParamsNotSet && lineLock == LineUnlocked)
+        set_rate -> enter_value ->
+            (press_set -> SETUP[ParamsSet][lineLock]
+             |
+             press_cancel -> SETUP[ParamsNotSet][lineLock])
+    |
+    when (params == ParamsSet && lineLock == LineUnlocked)
+        clear_rate -> SETUP[ParamsNotSet][lineLock]
+    |
+    when (params == ParamsSet && lineLock == LineUnlocked)
+        connect_set -> purge_air -> lock_line -> SETUP[params][LineLocked]
+    |
+    when (lineLock == LineLocked)
+        confirm_settings -> INFUSION[UnitUnlocked]
+    |
+    when (lineLock == LineLocked)
+        erase_and_unlock_line -> SETUP[params][LineUnlocked]
+),
