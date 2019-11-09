@@ -1,0 +1,35 @@
+/** power system **/
+
+// Switch status
+const Switch_off = 0
+const Switch_on = 1
+range Switch_status = Switch_off .. Switch_on
+
+// Power mode
+const Battery = 0
+const AC = 1
+range Power_mode = Battery .. AC
+
+// power model
+POWER_SYSTEM = POWER[Battery][Switch_off],
+POWER[b: Power_mode][s: Switch_status] = (
+		when (s == Switch_off) power_on -> POWER[b][Switch_on]
+		|
+		when (s == Switch_on) power_off -> POWER[b][Switch_off]
+		|
+		when (b == Battery) plug_in -> POWER[AC][s]
+		|
+		when (b == AC) plug_out -> POWER[Batter][s]
+).
+
+
+
+// lines
+
+
+
+// alarms
+
+
+
+// user interface
