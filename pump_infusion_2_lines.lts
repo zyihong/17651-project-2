@@ -10,7 +10,7 @@ const Battery = 0
 const AC = 1
 range Power_mode = Battery .. AC
 
-// power model
+// Power model
 POWER_SYSTEM = POWER[Battery][Switch_off],
 POWER[b: Power_mode][s: Switch_status] = (
 		when (s == Switch_off) power_on -> POWER[b][Switch_on]
@@ -19,7 +19,7 @@ POWER[b: Power_mode][s: Switch_status] = (
 		|
 		when (b == Battery) plug_in -> POWER[AC][s]
 		|
-		when (b == AC) plug_out -> POWER[Batter][s]
+		when (b == AC) plug_out -> POWER[Battery][s]
 ).
 
 
@@ -28,8 +28,44 @@ POWER[b: Power_mode][s: Switch_status] = (
 
 
 
-// alarms
+/** alarm system **/
+
+// Alarm status
+const Alarm_slience = 0
+const Alarm_ring = 1
+range Alarm_status = Alarm_slience .. Alarm_ring
+
+// Alarm reason
+const ReasonA = 0
+const ReasonB = 1
+const ReasonC = 2
+range Alarm_reason = ReasonA .. ReasonC
+
+// Alarm model
+ALARM = (
+		// what caused the alarm to ring for reasonA?
+
+		// what caused the alarm to ring for reasonB?
+
+		// what caused the alarm to ring for reasonC?
+
+		// power is off, alarm stop
+		power_off -> ALARM
+),
+
+ALARM_SYSTEM[a: Alarm_status][r: Alarm_reason] = (
+		when (a == Alarm_ring) slience_alarm -> ALARM_SYSTEM[Alarm_slience][r]
+		|
+		when (a == Alarm_ring) keep_ring -> ALARM_SYSTEM[a][r]
+		// reason solved, ALARM_SYSTEM should down, trun back to ALARM
+		| // power is off, alarm stop
+		power_off -> ALARM
+).
 
 
 
-// user interface
+/** user interface **/
+
+
+
+
