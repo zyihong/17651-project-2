@@ -185,7 +185,7 @@ INFUSION[med: MedicienAmount][vol: Volume] =
     |
 	flow_blocked -> BLOCKED[med][vol]
 	|
-	flow_pinched -> BLOCKED[med][vol]
+	flow_pinched -> PINCHED[med][vol]
 	|
     when (med > EmptyMedicien && vol > LowVolume)
         dispense_main_med_flow -> INFUSION[med - 1][vol - 1]
