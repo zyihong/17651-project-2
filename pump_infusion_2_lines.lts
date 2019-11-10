@@ -13,7 +13,7 @@ range PowerMode = Battery .. AC
 // Battery level
 const Empty = 0
 const Low = 1
-const Full = 2
+const Full = 2    // just for convience, you can chenge it
 range BatteryLevel = Empty .. Full
 
 // Power system model
@@ -88,49 +88,88 @@ ALARM_SYSTEM[a: AlarmStateT][r: AlarmReason] = (
 
 /** user interface **/
 
+// medicien amount
+const EmptyMedicien = 0
+const FullMedicien = 1  // just for convience, you can chenge it
+range MedicienAmount = EmptyMedicien .. FullMedicien
+
+// set the parameters
 const ParamsNotSet = 2    // pump parameters not set yet
 const ParamsSet    = 3    // pump parameters already set
-
 range ParamsStateT = ParamsNotSet .. ParamsSet
 
 // Locked/unlocked states of a line with respect to a pump channel
 const LineUnlocked = 4  // line not locked into a pump channel 
 const LineLocked   = 5  // line locked into a pump channel
-
 range LineLockStateT = LineUnlocked .. LineLocked
 
 // Locked/unlocked states of the pump unit
 const UnitUnlocked = 6  // the keypad of the pump is not locked
 const UnitLocked   = 7  // the keypad of the pump is locked
-
 range UnitLockStateT = UnitUnlocked .. UnitLocked
+
+// Whether the user interface is confirmed
+const NotConfirmed = 0
+const Confirmed = 1
+range ConfirmStateT = NotConfirmed .. Confirmed
 
 // User interface system
 USERINTERFACE = (
-	power_on -> SETUP[ParamsNotSet][LineUnlocked][UnitUnlocked]
+	power_on -> SETUP[ParamsNotSet][LineUnlocked][UnitUnlocked][EmptyMedicien][NotConfirmed]
 ),
 
-SETUP[params:ParamsStateT][lineLock:LineLockStateT][unitLock:] = 
+SETUP[params: ParamsStateT][lineLock: LineLockStateT][unitLock: UnitLockStateT][med: MedicienAmount][conf: ConfirmStateT] = 
 (
-    unplug -> UNPLUGGED
-    |
-    turn_off -> POWER_OFF
-    |
-    when (params == ParamsNotSet && lineLock == LineUnlocked)
-        set_rate -> enter_value ->
-            (press_set -> SETUP[ParamsSet][lineLock]
-             |
-             press_cancel -> SETUP[ParamsNotSet][lineLock])
-    |
+    power_off -> USERINTERFACE
+    | // set medicien amount
+	when (med == EmptyMedicien) 
+		set_rate -> enter_value[m: MedicienAmount] -> SETUP[params][lineLock][unitLock][m][conf]
+	| // set params
+    when (params == ParamsNotSet && med > EmptyMedicien)// && lineLock == LineUnlocked)   
+        press_set -> SETUP[ParamsSet][lineLock][unitLock][med][conf]
+    | // unset params
+	when (params == ParamsNotSet && med > EmptyMedicien)// && lineLock == LineUnlocked)  
+        press_cancel -> SETUP[ParamsNotSet][lineLock][unitLock][EmptyMedicien][conf]
+    | //clear params
     when (params == ParamsSet && lineLock == LineUnlocked)
-        clear_rate -> SETUP[ParamsNotSet][lineLock]
-    |
+        clear_rate -> SETUP[ParamsNotSet][lineLock][unitLock][EmptyMedicien][conf]
+    | // Prepare line and lock
     when (params == ParamsSet && lineLock == LineUnlocked)
-        connect_set -> purge_air -> lock_line -> SETUP[params][LineLocked]
-    |
-    when (lineLock == LineLocked)
-        confirm_settings -> INFUSION[UnitUnlocked]
-    |
-    when (lineLock == LineLocked)
-        erase_and_unlock_line -> SETUP[params][LineUnlocked]
-),
+        connect_set -> purge_air -> lock_line -> SETUP[params][LineLocked][unitLock][med][conf]
+    | // Confirm settings
+    when (lineLock == LineLocked && conf == NotConfirmed)
+        confirm_settings -> SETUP[params][lineLock][unitLock][med][Confirmed]//INFUSION[UnitUnlocked]
+    | // Unlock line
+    when (lineLock == LineLocked && conf == NotConfirmed)
+        erase_and_unlock_line -> SETUP[params][LineUnlocked][unitLock][med][conf]
+	| // Change the settings
+	when (conf == NotConfirmed && unitLock == UnitUnlocked)
+		change_settings -> SETUP[params][lineLock][unitLock][med][conf]
+	| // Lock the keypad
+	when (conf == Confirmed && unitLock == UnitUnlocked)
+		lock_unit -> SETUP[params][lineLock][UnitLocked][med][conf]
+	| // Unlock the keypad
+	when (conf == Confirmed && unitLock == UnitLocked)
+		unlock_unit -> SETUP[params][lineLock][UnitUnlocked][med][conf]
+	| // If finish, wait for another dose
+	finish_setting -> USERINTERFACE
+).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
