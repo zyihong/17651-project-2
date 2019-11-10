@@ -27,7 +27,9 @@ POWER[b: PowerMode][s: SwitchStatus][l: BatteryLevel] = (
 		|
 		when (b == AC) plug_out -> POWER[Battery][s][l]
 		|
-		when (b == Battery && l > Empty && s == SwitchOn) discharge -> POWER[Battery][s][l - 1]
+		when (b == Battery && l > Low && s == SwitchOn) discharge -> POWER[Battery][s][l - 1]
+		|
+		when (b == Battery && l <= Low && l > Empty && s == SwitchOn) discharge_low -> POWER[Battery][s][l - 1]
 		|
 		when (b == Battery && l == Empty && s == SwitchOn) power_off -> POWER[Battery][SwitchOff][l]
 		|
@@ -46,10 +48,6 @@ POWER[b: PowerMode][s: SwitchStatus][l: BatteryLevel] = (
 
 
 
-// lines
-
-
-
 /** alarm system **/
 
 // Alarm status
@@ -58,20 +56,19 @@ const AlarmSilenced  = 1    // Alarm currently inactive
 range AlarmStateT = AlarmActivated .. AlarmSilenced
 
 // Alarm reason
-const ReasonA = 0
-const ReasonB = 1
-const ReasonC = 2
-range AlarmReason = ReasonA .. ReasonC
+const Pinched = 0
+const Blocked = 1
+const LowBattery = 2
+range AlarmReason = Pinched .. LowBattery
 
 // Alarm model
 ALARM = (
-		// what caused the alarm to ring for reasonA?
-
-		// what caused the alarm to ring for reasonB?
-
-		// what caused the alarm to ring for reasonC?
-
-		// power is off, alarm stop
+		flow_pinched ->sound_alarm -> ALARM_SYSTEM[AlarmActivated][Pinched]
+		|
+		flow_blocked -> sound_alarm -> ALARM_SYSTEM[AlarmActivated][Blocked]
+		|
+		discharge_low ->sound_alarm -> ALARM_SYSTEM[AlarmActivated][LowBattery]
+		| // power is off, alarm stop
 		power_off -> ALARM
 ),
 
@@ -80,6 +77,12 @@ ALARM_SYSTEM[a: AlarmStateT][r: AlarmReason] = (
 		|
 		when (a == AlarmActivated) sound_alarm -> ALARM_SYSTEM[a][r]
 		// reason solved, ALARM_SYSTEM should down, trun back to ALARM
+		| // flow blocked solved
+		when (r == Blocked) flow_unblocked -> ALARM
+		| // flow pinched solved
+		when (r == Pinched) flow_unpinched -> ALARM
+		| //low battery solved
+		when (r == LowBattery) charge -> ALARM
 		| // power is off, alarm stop
 		power_off -> ALARM
 ).
@@ -157,9 +160,51 @@ SETUP[params: ParamsStateT][lineLock: LineLockStateT][unitLock: UnitLockStateT][
 
 
 
+/** lines **/
 
+// medicien volume
+const LowVolume = 0
+const HighVolume = 1 // For convenience
+range Volume = LowVolume .. HighVolume
 
+LINE = L[EmptyMedicien],
+L[med: MedicienAmount] = (
+		power_off -> L[med]
+		|
+		enter_value[m: MedicienAmount] -> L[m]
+		|
+		confirm_settings -> INFUSION[med][HighVolume]
+),
 
+// Pump in infusion mode:
+INFUSION[med: MedicienAmount][vol: Volume] =
+(
+    power_off -> LINE
+    |
+    change_settings -> LINE
+    |
+	flow_blocked -> BLOCKED[med][vol]
+	|
+	flow_pinched -> BLOCKED[med][vol]
+	|
+    when (med > EmptyMedicien && vol > LowVolume)
+        dispense_main_med_flow -> INFUSION[med - 1][vol - 1]
+    |
+    when (med > EmptyMedicien && vol == 0)
+		what_to_do -> INFUSION[med][vol]
+),
+
+BLOCKED[med: MedicienAmount][vol: Volume] = (
+	power_off -> LINE
+	|
+	flow_unblocked -> INFUSION[med][vol]
+),
+
+PINCHED[med: MedicienAmount][vol: Volume] = (
+	power_off -> LINE
+	|
+	flow_unpinched -> INFUSION[med][vol]
+).
 
 
 
