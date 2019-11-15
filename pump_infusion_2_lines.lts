@@ -146,7 +146,7 @@ SETUP[params: ParamsStateT][lineLock: LineLockStateT][unitLock: UnitLockStateT][
     when (lineLock == LineLocked && conf == NotConfirmed)
         erase_and_unlock_line -> SETUP[params][LineUnlocked][unitLock][med][conf]
 	| // Change the settings
-	when (conf == NotConfirmed && unitLock == UnitUnlocked)
+	when (conf == Confirmed && unitLock == UnitUnlocked)
 		change_settings -> SETUP[params][lineLock][unitLock][med][conf]
 	| // Lock the keypad
 	when (conf == Confirmed && unitLock == UnitUnlocked)
@@ -189,9 +189,9 @@ INFUSION[med: MedicienAmount][vol: Volume] =
 	|
     when (med > EmptyMedicien && vol > LowVolume)
         dispense_main_med_flow -> INFUSION[med - 1][vol - 1]
-    |
-    when (med > EmptyMedicien && vol == 0)
-		what_to_do -> INFUSION[med][vol]
+//    |
+//    when (med > EmptyMedicien && vol == LowVolume)
+//		what_to_do -> INFUSION[med][vol]
 ),
 
 BLOCKED[med: MedicienAmount][vol: Volume] = (
@@ -207,8 +207,27 @@ PINCHED[med: MedicienAmount][vol: Volume] = (
 ).
 
 
+/** Semaphore **/
+const Max = 1
+range ValueRange = 0..Max
+SEMAPHORE = SEMA[1], // the N is num of semaphore, it is 1 in default
+SEMA[v:ValueRange] = (
+		when(v<Max){confirm_settings}->SEMA[v+1] // conditions to release
+        |
+		when(v>0) {set_rate}->SEMA[v-1] // conditions to acquire
+		|
+		power_off->SEMA[1] // restart semaphore after power_off
+).
 
 
+/** Pump **/
+||PUMP = (
+		lines[i:1..2]:LINE ||
+		lines[i:1..2]:USERINTERFACE ||
+		lines[i:1..2]:ALARM ||
+		POWER_SYSTEM ||
+		{lines[i:1..2]}::SEMAPHORE
+)/{forall[i:1..2]{power_on/lines[i].power_on, power_off/lines[i].power_off, discharge_low/lines[i].discharge_low, charge/lines[i].charge}}.
 
 
 
