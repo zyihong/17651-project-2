@@ -59,15 +59,15 @@ range AlarmStateT = AlarmActivated .. AlarmSilenced
 const Pinched = 0
 const Blocked = 1
 const LowBattery = 2
-range AlarmReason = Pinched .. LowBattery
+range AlarmReason = Pinched .. Blocked
 
 // Alarm model
 ALARM = (
 		flow_pinched ->sound_alarm -> ALARM_SYSTEM[AlarmActivated][Pinched]
 		|
 		flow_blocked -> sound_alarm -> ALARM_SYSTEM[AlarmActivated][Blocked]
-		|
-		discharge_low ->sound_alarm -> ALARM_SYSTEM[AlarmActivated][LowBattery]
+//		|
+//		discharge_low ->sound_alarm -> ALARM_SYSTEM[AlarmActivated][LowBattery]
 		| // power is off, alarm stop
 		power_off -> ALARM
 ),
@@ -81,13 +81,25 @@ ALARM_SYSTEM[a: AlarmStateT][r: AlarmReason] = (
 		when (r == Blocked) flow_unblocked -> ALARM
 		| // flow pinched solved
 		when (r == Pinched) flow_unpinched -> ALARM
-		| //low battery solved
-		when (r == LowBattery) charge -> ALARM
 		| // power is off, alarm stop
 		power_off -> ALARM
 ).
 
+POWER_ALARM = (
+		discharge_low ->sound_alarm -> POWER_ALARM_SYSTEM[AlarmActivated]
+		| // power is off, alarm stop
+		power_off -> POWER_ALARM
+),
 
+POWER_ALARM_SYSTEM[a: AlarmStateT] = (
+		when (a == AlarmActivated) silence_alarm -> POWER_ALARM_SYSTEM[AlarmSilenced]
+		|
+		when (a == AlarmActivated) sound_alarm -> POWER_ALARM_SYSTEM[a]
+		| //low battery solved
+		charge -> POWER_ALARM
+		| // power is off, alarm stop
+		power_off -> POWER_ALARM
+).
 
 /** user interface **/
 
@@ -226,6 +238,7 @@ SEMA[v:ValueRange] = (
 		lines[i:1..2]:USERINTERFACE ||
 		lines[i:1..2]:ALARM ||
 		POWER_SYSTEM ||
+		POWER_ALARM ||
 		{lines[i:1..2]}::SEMAPHORE
 )/{forall[i:1..2]{power_on/lines[i].power_on, power_off/lines[i].power_off, discharge_low/lines[i].discharge_low, charge/lines[i].charge}}.
 
