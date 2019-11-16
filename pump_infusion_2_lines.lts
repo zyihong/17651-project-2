@@ -105,7 +105,7 @@ POWER_ALARM_SYSTEM[a: AlarmStateT] = (
 
 // medicien amount
 const EmptyMedicien = 0
-const FullMedicien = 1  // just for convience, you can chenge it
+const FullMedicien = 4  // just for convience, you can chenge it
 range MedicienAmount = EmptyMedicien .. FullMedicien
 
 // set the parameters
@@ -166,8 +166,8 @@ SETUP[params: ParamsStateT][lineLock: LineLockStateT][unitLock: UnitLockStateT][
 	| // Unlock the keypad
 	when (conf == Confirmed && unitLock == UnitLocked)
 		unlock_unit -> SETUP[params][lineLock][UnitUnlocked][med][conf]
-	| // If finish, wait for another dose
-	finish_setting -> USERINTERFACE
+//	| // If finish, wait for another dose
+//	finish_setting -> USERINTERFACE
 ).
 
 
@@ -185,37 +185,39 @@ L[med: MedicienAmount] = (
 		|
 		enter_value[m: MedicienAmount] -> L[m]
 		|
-		confirm_settings -> INFUSION[med][HighVolume]
+		confirm_settings -> INFUSION[med]//[HighVolume]
 ),
 
 // Pump in infusion mode:
-INFUSION[med: MedicienAmount][vol: Volume] =
+INFUSION[med: MedicienAmount]=//[vol: Volume] =
 (
     power_off -> LINE
     |
     change_settings -> LINE
     |
-	flow_blocked -> BLOCKED[med][vol]
+	when (med > EmptyMedicien)//&& vol > LowVolume)
+		flow_blocked -> BLOCKED[med]//[vol]
 	|
-	flow_pinched -> PINCHED[med][vol]
+	when (med > EmptyMedicien)// && vol > LowVolume)
+		flow_pinched -> PINCHED[med]//[vol]
 	|
-    when (med > EmptyMedicien && vol > LowVolume)
-        dispense_main_med_flow -> INFUSION[med - 1][vol - 1]
+    when (med > EmptyMedicien)// && vol > LowVolume)
+        dispense_main_med_flow -> INFUSION[med - 1]//[vol - 1]
 //    |
 //    when (med > EmptyMedicien && vol == LowVolume)
 //		what_to_do -> INFUSION[med][vol]
 ),
 
-BLOCKED[med: MedicienAmount][vol: Volume] = (
+BLOCKED[med: MedicienAmount]=(//[vol: Volume] = (
 	power_off -> LINE
 	|
-	flow_unblocked -> INFUSION[med][vol]
+	flow_unblocked -> INFUSION[med]//[vol]
 ),
 
-PINCHED[med: MedicienAmount][vol: Volume] = (
+PINCHED[med: MedicienAmount]=(//[vol: Volume] = (
 	power_off -> LINE
 	|
-	flow_unpinched -> INFUSION[med][vol]
+	flow_unpinched -> INFUSION[med]//[vol]
 ).
 
 
@@ -240,7 +242,7 @@ SEMA[v:ValueRange] = (
 		POWER_SYSTEM ||
 		POWER_ALARM ||
 		{lines[i:1..2]}::SEMAPHORE
-)/{forall[i:1..2]{power_on/lines[i].power_on, power_off/lines[i].power_off, discharge_low/lines[i].discharge_low, charge/lines[i].charge}}.
+)/{forall[i:1..2]{power_on/lines[i].power_on, power_off/lines[i].power_off}}.//, discharge_low/lines[i].discharge_low, charge/lines[i].charge}}.
 
 
 
