@@ -12,14 +12,14 @@ range PowerMode = Battery .. AC
 
 // Battery level
 const Empty = 0
-const Low = 1
-const Full = 2    // just for convience, you can chenge it
+const Low = 2	// battery level less than 2 is low (e.g. 1)
+const Full = 5    // just for convience, you can chenge it
 range BatteryLevel = Empty .. Full
 
 // Power system model
 POWER_SYSTEM = POWER[Battery][SwitchOff][Full],
 POWER[b: PowerMode][s: SwitchStatus][l: BatteryLevel] = (
-		when (s == SwitchOff && l > Empty) power_on -> POWER[b][SwitchOn][l]
+		when (s == SwitchOff && (b == Battery && l > Empty || b == AC)) power_on -> POWER[b][SwitchOn][l]
 		|
 		when (s == SwitchOn) power_off -> POWER[b][SwitchOff][l]
 		|
@@ -29,7 +29,9 @@ POWER[b: PowerMode][s: SwitchStatus][l: BatteryLevel] = (
 		|
 		when (b == Battery && l > Low && s == SwitchOn) discharge -> POWER[Battery][s][l - 1]
 		|
-		when (b == Battery && l <= Low && l > Empty && s == SwitchOn) discharge_low -> POWER[Battery][s][l - 1]
+		when (b == Battery && l == Low && s == SwitchOn) discharge_low -> POWER[Battery][s][l - 1]
+		|
+		when (b == Battery && l == Low - 1 && s == SwitchOn) discharge_empty -> POWER[Battery][s][l - 1]
 		|
 		when (b == Battery && l == Empty && s == SwitchOn) power_off -> POWER[Battery][SwitchOff][l]
 		|
@@ -63,9 +65,9 @@ range AlarmReason = Pinched .. Blocked
 
 // Alarm model
 ALARM = (
-		flow_pinched ->sound_alarm -> ALARM_SYSTEM[AlarmActivated][Pinched]
+		flow_pinched -> ALARM_SYSTEM[AlarmActivated][Pinched]
 		|
-		flow_blocked -> sound_alarm -> ALARM_SYSTEM[AlarmActivated][Blocked]
+		flow_blocked -> ALARM_SYSTEM[AlarmActivated][Blocked]
 //		|
 //		discharge_low ->sound_alarm -> ALARM_SYSTEM[AlarmActivated][LowBattery]
 		| // power is off, alarm stop
@@ -86,8 +88,10 @@ ALARM_SYSTEM[a: AlarmStateT][r: AlarmReason] = (
 ).
 
 POWER_ALARM = (
-		discharge_low ->sound_alarm -> POWER_ALARM_SYSTEM[AlarmActivated]
+		discharge_low -> POWER_ALARM_SYSTEM[AlarmActivated]
 		| // power is off, alarm stop
+		charge -> POWER_ALARM
+		|
 		power_off -> POWER_ALARM
 ),
 
@@ -185,46 +189,55 @@ L[med: MedicienAmount] = (
 		|
 		enter_value[m: MedicienAmount] -> L[m]
 		|
-		confirm_settings -> INFUSION[med]//[HighVolume]
+		discharge_empty -> L[med]
+		|
+		charge -> L[med]
+		|
+		confirm_settings -> INFUSION[med][HighVolume]
 ),
 
 // Pump in infusion mode:
-INFUSION[med: MedicienAmount]=//[vol: Volume] =
+INFUSION[med: MedicienAmount][vol: Volume] =
 (
     power_off -> LINE
     |
     change_settings -> LINE
     |
-	when (med > EmptyMedicien)//&& vol > LowVolume)
-		flow_blocked -> BLOCKED[med]//[vol]
+	charge -> INFUSION[med][HighVolume]
 	|
-	when (med > EmptyMedicien)// && vol > LowVolume)
-		flow_pinched -> PINCHED[med]//[vol]
+	when (vol > LowVolume)
+		discharge_empty -> INFUSION[med][vol - 1]
 	|
-    when (med > EmptyMedicien)// && vol > LowVolume)
-        dispense_main_med_flow -> INFUSION[med - 1]//[vol - 1]
+	when (med > EmptyMedicien && vol > LowVolume)
+		flow_blocked -> BLOCKED[med][vol]
+	|
+	when (med > EmptyMedicien && vol > LowVolume)
+		flow_pinched -> PINCHED[med][vol]
+	|
+    when (med > EmptyMedicien && vol > LowVolume)
+        dispense_main_med_flow -> INFUSION[med - 1][vol]
 //    |
 //    when (med > EmptyMedicien && vol == LowVolume)
 //		what_to_do -> INFUSION[med][vol]
 ),
 
-BLOCKED[med: MedicienAmount]=(//[vol: Volume] = (
+BLOCKED[med: MedicienAmount][vol: Volume] = (
 	power_off -> LINE
 	|
-	flow_unblocked -> INFUSION[med]//[vol]
+	flow_unblocked -> INFUSION[med][vol]
 ),
 
-PINCHED[med: MedicienAmount]=(//[vol: Volume] = (
+PINCHED[med: MedicienAmount][vol: Volume] = (
 	power_off -> LINE
 	|
-	flow_unpinched -> INFUSION[med]//[vol]
+	flow_unpinched -> INFUSION[med][vol]
 ).
 
 
-/** Semaphore **/
+/** Semaphores **/
 const Max = 1
 range ValueRange = 0..Max
-SEMAPHORE = SEMA[1], // the N is num of semaphore, it is 1 in default
+SEMAPHORE = SEMA[1],
 SEMA[v:ValueRange] = (
 		when(v<Max){confirm_settings}->SEMA[v+1] // conditions to release
         |
@@ -242,7 +255,7 @@ SEMA[v:ValueRange] = (
 		POWER_SYSTEM ||
 		POWER_ALARM ||
 		{lines[i:1..2]}::SEMAPHORE
-)/{forall[i:1..2]{power_on/lines[i].power_on, power_off/lines[i].power_off}}.//, discharge_low/lines[i].discharge_low, charge/lines[i].charge}}.
+)/{forall[i:1..2]{power_on/lines[i].power_on, power_off/lines[i].power_off, discharge_empty/lines[i].discharge_empty, charge/lines[i].charge}}.
 
 
 
