@@ -183,17 +183,17 @@ const LowVolume = 0
 const HighVolume = 1 // For convenience
 range Volume = LowVolume .. HighVolume
 
-LINE = L[EmptyMedicien],
-L[med: MedicienAmount] = (
-		power_off -> L[med]
+LINE = L[EmptyMedicien][HighVolume],
+L[med: MedicienAmount][vol: Volume] = (
+		power_off -> L[med][vol]
 		|
-		enter_value[m: MedicienAmount] -> L[m]
+		enter_value[m: MedicienAmount] -> L[m][vol]
 		|
-		discharge_empty -> L[med]
+		discharge_empty -> L[med][LowVolume]
 		|
-		charge -> L[med]
+		charge -> L[med][HighVolume]
 		|
-		confirm_settings -> INFUSION[med][HighVolume]
+		confirm_settings -> INFUSION[med][vol]
 ),
 
 // Pump in infusion mode:
@@ -258,10 +258,42 @@ SEMA[v:ValueRange] = (
 )/{forall[i:1..2]{power_on/lines[i].power_on, power_off/lines[i].power_off, discharge_empty/lines[i].discharge_empty, charge/lines[i].charge}}.
 
 
+/** Property 1 **/
+// The pump cannot start pumping without the operator first confirming the settings on the pump
+fluent START[i:1..2] = <{lines[i].dispense_main_med_flow}, {power_off}>
+fluent CONFIRMED[i:1..2] = <{lines[i].confirm_settings}, {power_off}>
+assert CONFIRM_THEN_START = forall[i:1..2] (!START[i] U CONFIRMED[i])
 
+/** Porperty 2 **/
+// Electrical power can fail infinitely often
+fluent POWER_FAIL = <{discharge_empty}, {plug_in}>
+assert FAIL_OFTEN = [](<>POWER_FAIL)
 
+/** Porperty 3 **/
+// If the backup battery power fails, pumping will not occur on any line.
+assert  PUMP_NOT_OCCUR = forall[i:1..2] []!(lines[i].dispense_main_med_flow && POWER_FAIL)
 
+/** Porperty 4 **/
+// It is always possible to resume pumping after a failure.
+fluent LINE_FAIL[i:1..2] = <{lines[i].flow_blocked, lines[i].flow_pinched, discharge_low}, {lines[i].flow_unblocked, lines[i].flow_unpinched, plug_in}>
+assert RESUME = forall[i:1..2] [](LINE_FAIL[i] -> <>lines[i].dispense_main_med_flow)
 
+/** Porperty 5 **/
+// An alarm will sound on any line failure (blockage, pinching, empty ﬂuid, or whatever failures you model).
+assert ALARM_ACTIVATE = forall[i:1..2] [](LINE_FAIL[i] -> <>(lines[i].sound_alarm || lines[i].slience_alarm || sound_alarm || slience_alarm))
+
+/** Porperty 6 **/
+// In the absence of errors the pump will continue to pump until the treatment is ﬁnished.
+//assert KEEP_PUMP = forall[i:1..2] (!LINE_FAIL[i] -> <>) /**TODO**/
+
+/** Porperty 7 **/
+// Checked by deadlock checking
+
+/** Porperty 8 **/
+//
+
+/** Porperty 9 **/
+//
 
 
 
