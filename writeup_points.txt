@@ -1,0 +1,109 @@
+Task 1:
+	1. 
+		// things inside the () means when we are using ||, we are using things like l[i:1..2]
+		(a). Power system
+		(b). Individual line (x2)
+		(c). Alarm system (2 for each line, 1 for power system)
+		(d). User interface (2 for each line)
+
+	2. 
+		/** TODO: check if I am missing any assumptions **/
+
+		(a). The alarm is seperate for 2 lines, means when line 1 goes wrong, alarm 1 will ring and
+			 line 2 can keep despensing or if line 2 goes wrong, it will also ring
+		(b). The alarm for line and the alarm for power system are seperate, means we have an alarm used 
+			 only for battery
+		(c). We have 4 causes that will ring the alarm: 
+				i). 	for lines: blocked, pinched, empty line (check the last one with Yao)
+				ii). 	for battery: battery has low power
+		(d). The alarm can be slienced at any time, even before it make a sound when it detect something wrong.
+		(e). An alarm can not sound any more once "slience" action is taken
+		(f). Two lines should set their values in order, means that we can not set a value for line 1
+			 and then one value for line 2 and then back to line 1. (We have a semafore for this, action
+			 "set_value" will acquire the lock and action "confirm_setting" will release it)
+		(g). Action "change_settings" ---- check this with Yao, see if we want to keep this
+		(h). Nurse add the same amount of medicine (bags) as the value she enters in the UI.
+		(i). We only store treatment status for alarm rings (suppose we want to dispense 10 bags, when
+			 the alarm detect something wrong, there is 7 bags left, the pump stops now, and when the 
+			 problem is solved, we restart with 7 bags)
+		(j). We do not store status for "power_off", if the machine is turned off, every thing lost
+			 and we have to start from very begining.
+		(k). Any line alarm will stop the pump, (low battery will not, we can still dispense when battery
+			 level is low)  
+		(l). Every time we "power_on", the battery level is full
+
+	3. Diagram: pass
+
+	4. 
+		/** TODO: Add anything you think is necessary, not shall whether this is enough **/
+
+		(a). Power system:
+			If the charger is pluged out, it is in Battery Mode, and in this mode, the system can discharge
+			If the charger is pluged in, it is in AC mode, and in this mode, the system can charge
+		(b). Individual line:
+			After entered value and confirmed, it will start to dispense is the power allows
+			If the line goes wrong (blocked/pinched), it will goes to the alarm ayatem and stop dispensing
+			If the line finishes its treatment ... (check with Yao)
+		(c). alarm system:
+			Detect problem (by synchornize), if there is a problem, then ring with corresponding alarm
+			The alarm can take "sound" or "slience" at any time, and it can not sound any more once "slience"
+			is taken
+		(d). UI:
+			Can "set rate", "enter value", "confirm settings", "lock unit", "lock line"......
+
+	5.
+		/** TODO: Add more! **/
+
+		(a). Our system dispense two medicine seperately (two lines, two needles, e.g. some m1, then some m2...)
+			 But the real pump should combine two medicine together and use only one needle.
+
+Task 2:
+	See code
+
+Task 3:
+
+	/** TODO: Add more! Modification is welcome **/
+
+	1. Alloy:
+		(a). Strength:
+			i).		Can show relation between each component clearly
+		(b). Weakness:
+			i).		Complicated
+		(c). Recommend to use:
+			When you want to build a model to show relations between components
+		(d). Not recommend:
+			When your model is very complex, you may want to use other tools since Alloy is hard to debug
+		(c). Development:
+			i).		Add the feature that can show which invariant it breaks or may be show the process
+					of checking invariants when finding counter examples
+
+	2. FSP:
+		(a). Strength:
+			i).		Can show process step by step
+			ii).	Can define critical sections
+			iii).	Usefull when you want to design parallel systems
+		(b). Weakness:
+			i).		Hard to read the figure
+		(c). Recommend to use:
+			When you want to build a model to show steps of one or more process
+			When the system includes parallel processes
+		(d). Not recommend:
+			No idea
+		(c). Development:
+			i).		No idea
+
+	3. Pre-post conditions:
+		No idea.
+
+
+
+
+
+
+
+
+
+
+
+
+
