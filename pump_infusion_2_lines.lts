@@ -1,53 +1,51 @@
+// 2 Lines Pump System
+// Designers: Harsh Varshney
+//			  Siddhant Mishra
+//			  Yao Yu
+//			  Yihong Zou
+//			  Zixin Ye
+
+
 /** power system **/
 
 // Switch status
-const SwitchOff = 0
-const SwitchOn = 1
+const SwitchOff = 0		// system pwoer on
+const SwitchOn = 1		// system power off
 range SwitchStatus = SwitchOff .. SwitchOn
 
 // Power mode
-const Battery = 0
-const AC = 1
+const Battery = 0		// system using battery
+const AC = 1			// system using AC charger
 range PowerMode = Battery .. AC
 
 // Battery level
-const Empty = 0
-const Low = 2	// battery level less than 2 is low (e.g. 1)
-const Full = 5    // just for convience, you can chenge it
+const Empty = 0			// Battery empty
+const Low = 2			// Battery level less than 2 is low (e.g. 1)
+const Full = 5    		// jBattery full
 range BatteryLevel = Empty .. Full
 
 // Power system model
 POWER_SYSTEM = POWER[Battery][SwitchOff][Full],
 POWER[b: PowerMode][s: SwitchStatus][l: BatteryLevel] = (
+		// turn on the system
 		when (s == SwitchOff && (b == Battery && l > Empty || b == AC)) power_on -> POWER[b][SwitchOn][l]
-		|
+		|	// turn off the system
 		when (s == SwitchOn) power_off -> POWER[b][SwitchOff][l]
-		|
+		|	// plug in the charger to use AC mode
 		when (b == Battery) plug_in -> POWER[AC][s][l]
-		|
+		|	// plug out the charger to use battery
 		when (b == AC) plug_out -> POWER[Battery][s][l]
-		|
+		|	// battery still has enough power
 		when (b == Battery && l > Low && s == SwitchOn) discharge -> POWER[Battery][s][l - 1]
-		|
+		|	// battery will reduce to low power
 		when (b == Battery && l == Low && s == SwitchOn) discharge_low -> POWER[Battery][s][l - 1]
-		|
+		|	// battery will reduce to empty
 		when (b == Battery && l == Low - 1 && s == SwitchOn) discharge_empty -> POWER[Battery][s][l - 1]
-		|
+		|	// when battery is empty, you can only power off or plug in
 		when (b == Battery && l == Empty && s == SwitchOn) power_off -> POWER[Battery][SwitchOff][l]
-		|
+		|	// when AC charger is pluged in, you can charge the battery
 		when (b == AC && l < Full) charge -> POWER[AC][s][l + 1]
 ).
-
-
-//property POWERCHECK = BATTERYLEVEL[Battery][Switch_off][Full],
-//BATTERYLEVEL[b: Power_mode][s: Switch_status][l: Battery_level] = (
-//		when (b == Battery && s == Switch_off && l == Empty) plug_in -> BATTERYLEVEL[AC][s][l]
-//		|
-//		when ()
-//).
-
-//||CHECK_POWER = (POWER_SYSTEM || POWERCHECK).
-
 
 
 /** alarm system **/
@@ -58,22 +56,21 @@ const AlarmSilenced  = 1    // Alarm currently inactive
 range AlarmStateT = AlarmActivated .. AlarmSilenced
 
 // Alarm reason
-const Pinched = 0
-const Blocked = 1
-const LowBattery = 2
+const Pinched = 0		// line blocked
+const Blocked = 1		// line pinched
+const LowBattery = 2	// battery level is low
 range AlarmReason = Pinched .. Blocked
 
-// Alarm model
-ALARM = (
+// Line Alarm model
+ALARM = (	// line pinched, go to alarm system
 		flow_pinched -> ALARM_SYSTEM[AlarmActivated][Pinched]
-		|
+		|	// line blocked, go to alarm system
 		flow_blocked -> ALARM_SYSTEM[AlarmActivated][Blocked]
-//		|
-//		discharge_low ->sound_alarm -> ALARM_SYSTEM[AlarmActivated][LowBattery]
-		| // power is off, alarm stop
+		| 	// power is off, alarm stop
 		power_off -> ALARM
 ),
 
+// alarm system, sound or slience alarm, or deal with problem
 ALARM_SYSTEM[a: AlarmStateT][r: AlarmReason] = (
 		when (a == AlarmActivated) silence_alarm -> ALARM_SYSTEM[AlarmSilenced][r]
 		|
@@ -87,14 +84,16 @@ ALARM_SYSTEM[a: AlarmStateT][r: AlarmReason] = (
 		power_off -> ALARM
 ).
 
-POWER_ALARM = (
+// Power Alarm model
+POWER_ALARM = (	// battery low, go to power alarm system
 		discharge_low -> POWER_ALARM_SYSTEM[AlarmActivated]
-		| // power is off, alarm stop
+		| 	// battery get charged, alarm keep stop
 		charge -> POWER_ALARM
-		|
+		|	// power is off, alarm stop
 		power_off -> POWER_ALARM
 ),
 
+// power alarm system, sound or slience alarm, or deal with problem
 POWER_ALARM_SYSTEM[a: AlarmStateT] = (
 		when (a == AlarmActivated) silence_alarm -> POWER_ALARM_SYSTEM[AlarmSilenced]
 		|
@@ -137,6 +136,7 @@ USERINTERFACE = (
 	power_on -> SETUP[ParamsNotSet][LineUnlocked][UnitUnlocked][EmptyMedicien][NotConfirmed]
 ),
 
+// start to setup
 SETUP[params: ParamsStateT][lineLock: LineLockStateT][unitLock: UnitLockStateT][med: MedicienAmount][conf: ConfirmStateT] = 
 (
     power_off -> USERINTERFACE
@@ -144,10 +144,10 @@ SETUP[params: ParamsStateT][lineLock: LineLockStateT][unitLock: UnitLockStateT][
 	when (med == EmptyMedicien) 
 		set_rate -> enter_value[m: MedicienAmount] -> SETUP[params][lineLock][unitLock][m][conf]
 	| // set params
-    when (params == ParamsNotSet && med > EmptyMedicien)// && lineLock == LineUnlocked)   
+    when (params == ParamsNotSet && med > EmptyMedicien)
         press_set -> SETUP[ParamsSet][lineLock][unitLock][med][conf]
     | // unset params
-	when (params == ParamsNotSet && med > EmptyMedicien)// && lineLock == LineUnlocked)  
+	when (params == ParamsNotSet && med > EmptyMedicien)
         press_cancel -> SETUP[ParamsNotSet][lineLock][unitLock][EmptyMedicien][conf]
     | //clear params
     when (params == ParamsSet && lineLock == LineUnlocked)
@@ -157,7 +157,7 @@ SETUP[params: ParamsStateT][lineLock: LineLockStateT][unitLock: UnitLockStateT][
         connect_set -> purge_air -> lock_line -> SETUP[params][LineLocked][unitLock][med][conf]
     | // Confirm settings
     when (lineLock == LineLocked && conf == NotConfirmed)
-        confirm_settings -> SETUP[params][lineLock][unitLock][med][Confirmed]//INFUSION[UnitUnlocked]
+        confirm_settings -> SETUP[params][lineLock][unitLock][med][Confirmed]
     | // Unlock line
     when (lineLock == LineLocked && conf == NotConfirmed)
         erase_and_unlock_line -> SETUP[params][LineUnlocked][unitLock][med][conf]
@@ -176,23 +176,25 @@ SETUP[params: ParamsStateT][lineLock: LineLockStateT][unitLock: UnitLockStateT][
 
 
 
-/** lines **/
+/** Individual Line **/
+// if battery level is empty, dispense cannot happen
 
-// medicien volume
-const LowVolume = 0
-const HighVolume = 1 // For convenience
+// Battery power volume
+const LowVolume = 0		// Battery has low power
+const HighVolume = 1 	// Battery has enough power
 range Volume = LowVolume .. HighVolume
 
+// line start up
 LINE = L[EmptyMedicien][HighVolume],
 L[med: MedicienAmount][vol: Volume] = (
 		power_off -> L[med][vol]
-		|
+		|	// nurse enters the medicine amount
 		enter_value[m: MedicienAmount] -> L[m][vol]
-		|
+		|	// battery power is empty, this will block the dispense
 		discharge_empty -> L[med][LowVolume]
-		|
+		|	// battery gets charged, unblock the dispense
 		charge -> L[med][HighVolume]
-		|
+		|	// start to dispense
 		confirm_settings -> INFUSION[med][vol]
 ),
 
@@ -202,18 +204,18 @@ INFUSION[med: MedicienAmount][vol: Volume] =
     power_off -> LINE
     |
     change_settings -> LINE
-    |
+    |	// battery get charged, unblock the dispense if blocked
 	charge -> INFUSION[med][HighVolume]
-	|
+	|	// battery power is empty, block the dispense
 	when (vol > LowVolume)
 		discharge_empty -> INFUSION[med][vol - 1]
-	|
+	|	// flow blocked, ring the alarm
 	when (med > EmptyMedicien && vol > LowVolume)
 		flow_blocked -> BLOCKED[med][vol]
-	|
+	|	// flow pinched, ring the alarm
 	when (med > EmptyMedicien && vol > LowVolume)
 		flow_pinched -> PINCHED[med][vol]
-	|
+	|	// normal dispense
     when (med > EmptyMedicien && vol > LowVolume)
         dispense_main_med_flow -> INFUSION[med - 1][vol]
 //    |
@@ -223,18 +225,23 @@ INFUSION[med: MedicienAmount][vol: Volume] =
 
 BLOCKED[med: MedicienAmount][vol: Volume] = (
 	power_off -> LINE
-	|
+	|	// flow unblocked
 	flow_unblocked -> INFUSION[med][vol]
 ),
 
 PINCHED[med: MedicienAmount][vol: Volume] = (
 	power_off -> LINE
-	|
+	|	// flow unpinched
 	flow_unpinched -> INFUSION[med][vol]
 ).
 
 
 /** Semaphores **/
+// used to control the order of setting of 2 lines
+// set rate will start the settings and another line can not setting now
+// confirm settings will finsih setting, another line can start setting now
+
+// semaphore value
 const Max = 1
 range ValueRange = 0..Max
 SEMAPHORE = SEMA[1],
