@@ -5,7 +5,6 @@
 //			  Yihong Zou
 //			  Zixin Ye
 
-
 /** power system **/
 
 // Switch status
@@ -46,7 +45,6 @@ POWER[b: PowerMode][s: SwitchStatus][l: BatteryLevel] = (
 		|	// when AC charger is pluged in, you can charge the battery
 		when (b == AC && l < Full) charge -> POWER[AC][s][l + 1]
 ).
-
 
 /** alarm system **/
 
@@ -170,8 +168,6 @@ SETUP[params: ParamsStateT][lineLock: LineLockStateT][unitLock: UnitLockStateT][
 	when (conf == Confirmed && unitLock == UnitLocked)
 		unlock_keypad -> SETUP[params][lineLock][UnitUnlocked][med][conf]
 ).
-
-
 
 /** Individual Line **/
 // if battery level is empty, dispense cannot happen
@@ -304,8 +300,6 @@ fluent KEYPAD_LOCKED[i:1..2] = <{lines[i].lock_keypad}, {lines[i].unlock_keypad,
 assert CHANGE_RATE_MUST_AFTER_UNLOCK_KEYPAD = forall[i:1..2] []!(lines[i].change_rate && KEYPAD_LOCKED[i])
 
 /** Property 9 **/
-//
+// To plug out the power, the pump should be plug in first.
 fluent AC_PLUGED_IN = <{plug_in}, {plug_out}>
 assert CHARGE_WHEN_PLUGED_IN = []!(charge && !AC_PLUGED_IN)
-
-
