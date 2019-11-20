@@ -58,8 +58,9 @@ range AlarmStateT = AlarmActivated .. AlarmSilenced
 // Alarm reason
 const Pinched = 0		// line blocked
 const Blocked = 1		// line pinched
+const Emptied = 2		// line emptied
 const LowBattery = 2	// battery level is low
-range AlarmReason = Pinched .. Blocked
+range AlarmReason = Pinched .. Emptied
 
 // Line Alarm model
 ALARM = (	// line pinched, go to alarm system
@@ -67,6 +68,8 @@ ALARM = (	// line pinched, go to alarm system
 		|	// line blocked, go to alarm system
 		flow_blocked -> ALARM_SYSTEM[AlarmActivated][Blocked]
 		| 	// power is off, alarm stop
+		flow_emptied -> ALARM_SYSTEM[AlarmActivated][Emptied]
+		|
 		power_off -> ALARM
 ),
 
@@ -80,6 +83,8 @@ ALARM_SYSTEM[a: AlarmStateT][r: AlarmReason] = (
 		when (r == Blocked) flow_unblocked -> ALARM
 		| // flow pinched solved
 		when (r == Pinched) flow_unpinched -> ALARM
+		| // flow emptied solved
+		when (r == Emptied ) flow_emptied_solved -> ALARM
 		| // power is off, alarm stop
 		power_off -> ALARM
 ).
@@ -140,38 +145,30 @@ USERINTERFACE = (
 SETUP[params: ParamsStateT][lineLock: LineLockStateT][unitLock: UnitLockStateT][med: MedicienAmount][conf: ConfirmStateT] = 
 (
     power_off -> USERINTERFACE
-    | // set medicien amount
+    | // Set medicien amount
 	when (med == EmptyMedicien) 
 		set_rate -> enter_value[m: MedicienAmount] -> SETUP[params][lineLock][unitLock][m][conf]
-	| // set params
+	| // Set params
     when (params == ParamsNotSet && med > EmptyMedicien)
-        press_set -> SETUP[ParamsSet][lineLock][unitLock][med][conf]
-    | // unset params
-	when (params == ParamsNotSet && med > EmptyMedicien)
-        press_cancel -> SETUP[ParamsNotSet][lineLock][unitLock][EmptyMedicien][conf]
-    | //clear params
-    when (params == ParamsSet && lineLock == LineUnlocked)
-        clear_rate -> SETUP[ParamsNotSet][lineLock][unitLock][EmptyMedicien][conf]
+        confirm_setting -> SETUP[ParamsSet][lineLock][unitLock][med][conf]
     | // Prepare line and lock
     when (params == ParamsSet && lineLock == LineUnlocked)
-        connect_set -> purge_air -> lock_line -> SETUP[params][LineLocked][unitLock][med][conf]
+        prepare_line-> SETUP[params][LineLocked][unitLock][med][conf]
     | // Confirm settings
     when (lineLock == LineLocked && conf == NotConfirmed)
-        confirm_settings -> SETUP[params][lineLock][unitLock][med][Confirmed]
+        start_dispense -> SETUP[params][lineLock][unitLock][med][Confirmed]
     | // Unlock line
-    when (lineLock == LineLocked && conf == NotConfirmed)
-        erase_and_unlock_line -> SETUP[params][LineUnlocked][unitLock][med][conf]
+    when (conf == NotConfirmed)
+        erase_and_unlock_line -> SETUP[ParamsNotSet][LineUnlocked][UnitUnlocked][EmptyMedicien][NotConfirmed]
 	| // Change the settings
 	when (conf == Confirmed && unitLock == UnitUnlocked)
-		change_settings -> SETUP[params][lineLock][unitLock][med][conf]
+		change_rate -> SETUP[params][lineLock][unitLock][med][conf]
 	| // Lock the keypad
 	when (conf == Confirmed && unitLock == UnitUnlocked)
-		lock_unit -> SETUP[params][lineLock][UnitLocked][med][conf]
+		lock_keypad -> SETUP[params][lineLock][UnitLocked][med][conf]
 	| // Unlock the keypad
 	when (conf == Confirmed && unitLock == UnitLocked)
-		unlock_unit -> SETUP[params][lineLock][UnitUnlocked][med][conf]
-//	| // If finish, wait for another dose
-//	finish_setting -> USERINTERFACE
+		unlock_keypad -> SETUP[params][lineLock][UnitUnlocked][med][conf]
 ).
 
 
@@ -195,7 +192,7 @@ L[med: MedicienAmount][vol: Volume] = (
 		|	// battery gets charged, unblock the dispense
 		charge -> L[med][HighVolume]
 		|	// start to dispense
-		confirm_settings -> INFUSION[med][vol]
+		start_dispense -> INFUSION[med][vol]
 ),
 
 // Pump in infusion mode:
@@ -203,7 +200,7 @@ INFUSION[med: MedicienAmount][vol: Volume] =
 (
     power_off -> LINE
     |
-    change_settings -> LINE
+    change_rate -> INFUSION[med][vol]
     |	// battery get charged, unblock the dispense if blocked
 	charge -> INFUSION[med][HighVolume]
 	|	// battery power is empty, block the dispense
@@ -218,9 +215,9 @@ INFUSION[med: MedicienAmount][vol: Volume] =
 	|	// normal dispense
     when (med > EmptyMedicien && vol > LowVolume)
         dispense_main_med_flow -> INFUSION[med - 1][vol]
-//    |
-//    when (med > EmptyMedicien && vol == LowVolume)
-//		what_to_do -> INFUSION[med][vol]
+    |	// flow emptied, ring the alarm
+    when (med == EmptyMedicien && vol > LowVolume)
+		flow_emptied -> EMPTIED[med][vol]
 ),
 
 BLOCKED[med: MedicienAmount][vol: Volume] = (
@@ -233,8 +230,13 @@ PINCHED[med: MedicienAmount][vol: Volume] = (
 	power_off -> LINE
 	|	// flow unpinched
 	flow_unpinched -> INFUSION[med][vol]
-).
+),
 
+EMPTIED[med: MedicienAmount][vol: Volume] = (
+	power_off -> LINE
+	|	// flow emptied
+	flow_emptied_solved -> LINE//INFUSION[med][vol]
+).
 
 /** Semaphores **/
 // used to control the order of setting of 2 lines
@@ -246,7 +248,7 @@ const Max = 1
 range ValueRange = 0..Max
 SEMAPHORE = SEMA[1],
 SEMA[v:ValueRange] = (
-		when(v<Max){confirm_settings}->SEMA[v+1] // conditions to release
+		when(v<Max){start_dispense,erase_and_unlock_line}->SEMA[v+1] // conditions to release
         |
 		when(v>0) {set_rate}->SEMA[v-1] // conditions to acquire
 		|
@@ -262,44 +264,46 @@ SEMA[v:ValueRange] = (
 		POWER_SYSTEM ||
 		POWER_ALARM ||
 		{lines[i:1..2]}::SEMAPHORE
-)/{forall[i:1..2]{power_on/lines[i].power_on, power_off/lines[i].power_off, discharge_empty/lines[i].discharge_empty, charge/lines[i].charge}}.
+)/{forall[i:1..2]{erase_and_unlock_line/lines[i].erase_and_unlock_line, power_on/lines[i].power_on, power_off/lines[i].power_off, discharge_empty/lines[i].discharge_empty, charge/lines[i].charge}}.
 
 
 /** Property 1 **/
 // The pump cannot start pumping without the operator first confirming the settings on the pump
 fluent START[i:1..2] = <{lines[i].dispense_main_med_flow}, {power_off}>
-fluent CONFIRMED[i:1..2] = <{lines[i].confirm_settings}, {power_off}>
+fluent CONFIRMED[i:1..2] = <{lines[i].start_dispense}, {power_off}>
 assert CONFIRM_THEN_START = forall[i:1..2] (!START[i] U CONFIRMED[i])
 
-/** Porperty 2 **/
+/** Property 2 **/
 // Electrical power can fail infinitely often
 fluent POWER_FAIL = <{discharge_empty}, {plug_in}>
 assert FAIL_OFTEN = [](<>POWER_FAIL)
 
-/** Porperty 3 **/
+/** Property 3 **/
 // If the backup battery power fails, pumping will not occur on any line.
 assert  PUMP_NOT_OCCUR = forall[i:1..2] []!(lines[i].dispense_main_med_flow && POWER_FAIL)
 
-/** Porperty 4 **/
+/** Property 4 **/
 // It is always possible to resume pumping after a failure.
 fluent LINE_FAIL[i:1..2] = <{lines[i].flow_blocked, lines[i].flow_pinched, discharge_low}, {lines[i].flow_unblocked, lines[i].flow_unpinched, plug_in}>
 assert RESUME = forall[i:1..2] [](LINE_FAIL[i] -> <>lines[i].dispense_main_med_flow)
 
-/** Porperty 5 **/
+/** Property 5 **/
 // An alarm will sound on any line failure (blockage, pinching, empty ﬂuid, or whatever failures you model).
 assert ALARM_ACTIVATE = forall[i:1..2] [](LINE_FAIL[i] -> <>(lines[i].sound_alarm || lines[i].slience_alarm || sound_alarm || slience_alarm))
 
-/** Porperty 6 **/
+/** Property 6 **/
 // In the absence of errors the pump will continue to pump until the treatment is ﬁnished.
-//assert KEEP_PUMP = forall[i:1..2] (!LINE_FAIL[i] -> <>) /**TODO**/
+assert KEEP_PUMP = forall[i:1..2] (!LINE_FAIL[i] -> <>(lines[i].flow_emptied))
 
-/** Porperty 7 **/
+/** Property 7 **/
 // Checked by deadlock checking
 
-/** Porperty 8 **/
-//
+/** Property 8 **/
+// To change the infusion rate during the infusion, the keypad must be unlocked.
+fluent KEYPAD_LOCKED[i:1..2] = <{lines[i].lock_keypad}, {lines[i].unlock_keypad, power_off}>
+assert CHANGE_RATE_MUST_AFTER_UNLOCK_KEYPAD = forall[i:1..2] []!(lines[i].change_rate && KEYPAD_LOCKED[i])
 
-/** Porperty 9 **/
+/** Property 9 **/
 //
 
 
