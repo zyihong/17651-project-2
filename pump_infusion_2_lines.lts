@@ -214,7 +214,7 @@ INFUSION[med: MedicienAmount][vol: Volume] =
 		flow_pinched -> PINCHED[med][vol]
 	|	// normal dispense
     when (med > EmptyMedicien && vol > LowVolume)
-        dispense_main_med_flow -> INFUSION[med - 1][vol]
+        dispense_medicien -> INFUSION[med - 1][vol]
     |	// flow emptied, ring the alarm
     when (med == EmptyMedicien && vol > LowVolume)
 		flow_emptied -> EMPTIED[med][vol]
@@ -269,7 +269,7 @@ SEMA[v:ValueRange] = (
 
 /** Property 1 **/
 // The pump cannot start pumping without the operator first confirming the settings on the pump
-fluent START[i:1..2] = <{lines[i].dispense_main_med_flow}, {power_off}>
+fluent START[i:1..2] = <{lines[i].dispense_medicien}, {power_off}>
 fluent CONFIRMED[i:1..2] = <{lines[i].start_dispense}, {power_off}>
 assert CONFIRM_THEN_START = forall[i:1..2] (!START[i] U CONFIRMED[i])
 
@@ -280,12 +280,12 @@ assert FAIL_OFTEN = [](<>POWER_FAIL)
 
 /** Property 3 **/
 // If the backup battery power fails, pumping will not occur on any line.
-assert  PUMP_NOT_OCCUR = forall[i:1..2] []!(lines[i].dispense_main_med_flow && POWER_FAIL)
+assert  PUMP_NOT_OCCUR = forall[i:1..2] []!(lines[i].dispense_medicien && POWER_FAIL)
 
 /** Property 4 **/
 // It is always possible to resume pumping after a failure.
 fluent LINE_FAIL[i:1..2] = <{lines[i].flow_blocked, lines[i].flow_pinched, discharge_low}, {lines[i].flow_unblocked, lines[i].flow_unpinched, plug_in}>
-assert RESUME = forall[i:1..2] [](LINE_FAIL[i] -> <>lines[i].dispense_main_med_flow)
+assert RESUME = forall[i:1..2] [](LINE_FAIL[i] -> <>lines[i].dispense_medicien)
 
 /** Property 5 **/
 // An alarm will sound on any line failure (blockage, pinching, empty ﬂuid, or whatever failures you model).
@@ -305,6 +305,7 @@ assert CHANGE_RATE_MUST_AFTER_UNLOCK_KEYPAD = forall[i:1..2] []!(lines[i].change
 
 /** Property 9 **/
 //
-
+fluent AC_PLUGED_IN = <{plug_in}, {plug_out}>
+assert CHARGE_WHEN_PLUGED_IN = []!(charge && !AC_PLUGED_IN)
 
 
