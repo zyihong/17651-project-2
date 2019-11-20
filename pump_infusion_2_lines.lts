@@ -300,6 +300,6 @@ fluent KEYPAD_LOCKED[i:1..2] = <{lines[i].lock_keypad}, {lines[i].unlock_keypad,
 assert CHANGE_RATE_MUST_AFTER_UNLOCK_KEYPAD = forall[i:1..2] []!(lines[i].change_rate && KEYPAD_LOCKED[i])
 
 /** Property 9 **/
-// To plug out the power, the pump should be plug in first.
+// Charge cannot happen when pluged out
 fluent AC_PLUGED_IN = <{plug_in}, {plug_out}>
 assert CHARGE_WHEN_PLUGED_IN = []!(charge && !AC_PLUGED_IN)
