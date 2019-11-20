@@ -1,0 +1,160 @@
+\documentclass{article}
+\usepackage{times}
+\usepackage{fullpage}
+
+\newcommand{\head}{\subsection*}
+\setlength{\parindent}{0pt}
+
+\begin{document}
+
+%_______________________________________________________________________________
+% Heading section
+%_______________________________________________________________________________
+% Revised this in 2018 to provide better guidance to students
+
+\begin{center}
+\rule{\textwidth}{1.5pt} \\ \rule[10pt]{\textwidth}{1pt}\\
+CMU 17-651\hfill Models of Software Systems\\[3ex]
+{\Large\bf Project 2: Concurrency}\\[3ex]
+Garlan \& Kang \hfill {Due: November 20, 2019} \rule{\textwidth}{1pt}
+\\\rule[9.5pt]{\textwidth}{1.5pt}
+\end{center}
+
+The purpose of this second project is to give you experience in
+modeling a realistic system as a state machine using concurrency.
+The example that we will use is the familiar Infusion Pump.
+A general description of an Infusion Pump and a variety of documents describing
+failures of real infusion pump systems can be found in the
+Infusion Pump Documents Module on the class website. The key
+ideas that we would like you to get out of this project are: (1)~the
+use of concurrency to manage complexity, separate concerns, model
+reality; (2) specification and checking of properties related to concurrency (safety
+and liveness); and (3) additional practice in creating appropriately
+abstract models.
+
+\bigskip You should carry out this project in your assigned team. Make sure that everyone in the
+group contributes to the overall effort. Each team should submit a single write-up of the project,
+due at the beginning of class on the project due date. We have posted a template for a group
+project write-up under the \LaTeX section of the course web site.
+
+\bigskip To give you a head start, we are including a very simple model of an infusion pump,
+which you may want to use as a starting point for your modeling effort.
+
+%___________________________________________________________________________________________________
+\head{Task 1 (50 points): Modeling with Concurrency}
+%___________________________________________________________________________________________________
+
+Model a 2-line infusion pump in FSP, using concurrency to factor the model into parts that
+represent different concerns. The two lines represent the potential delivery of two kinds of medicine
+to a patient. Possibilities for separation into concurrent processes include things like~(a) power system,
+(b) an individual line, (c) alarms, (d) user interface for setting of the pump (both initially and during operation).
+
+\bigskip
+
+As always, you will need to pick a level of abstraction appropriate for this model, and it is up to
+you to figure out what are the significant aspects of the system that should be included in your
+model.
+Your report should include a discussion of description of the system that you modeled, including:
+\begin{enumerate}
+  \item Assumptions that you are making about the functioning of an infusion pump (you might find it helpful to look at a user manual),
+
+  \bigskip
+  \noindent {\bf Answer:}
+
+  We make the following assumptions:
+
+  \begin{enumerate}
+      \item The alarm is separate for both the lines, i.e. when line 1 stops abruptly, alarm 1 will ring while line 2 can keep dispensing and vice versa.
+      \item The alarms for the lines and power system are separate, i.e. we have an alarm used only for battery
+      \item The lines alarm will ring when :
+          \begin{enumerate}
+            \item Line is blocked
+            \item Line is pinched
+            \item Line infusion is complete
+          \end{enumerate}
+      \item The Power system alarm will ring when :
+          \begin{enumerate}
+            \item The battery has low power
+          \end{enumerate}
+      \item The alarm can be silenced at any time, even before it makes a sound 
+      \item An alarm can not ring anymore once "silence" action has been taken
+      \item The values of two lines should be set in order i.e. we cannot set the values for both the lines simultaneously. For example, we cannot set value for line 1, and then set value for line 2, and then back to line 1. Setting the value is the critical region and we have a semaphore where the action "$set\_value$" will acquire the lock and action "$confirm\_setting$" will release it.
+      \item The nurse always adds the same amount of medicine as the value she enters in the UI.
+      \item We store the medicine units left to dispense when the alarm rings and the dispensing is stopped. For example, suppose we want to dispense 10 units of medicine. During the smooth operation, the alarm rings and the pump stops with the 7 units of medicine left to dispense. When the problem is solved, we restart the pump with 7 units.
+      \item We do not store status of the system for "$power\_off$" action. If the machine is turned off, everything lost and we have to start from the very beginning.
+      \item The power system alarm will stop the pump when it has a low battery. We can still dispense when the battery level is low.
+      \item We used the action name "$change\_rate$" in place of "$change\_settings$" as the nurse can only change the rate when the dispensing has started.
+      \item The nurse can change the rate of dispensing only when the keypad is unlocked to avoid accidental misuse.
+      \item The power system alarm will continue to ring when there is no battery to dispense the medicine.
+      \item Only the line alarms can make the infusion(medicine dispense) stop.
+      \item Every time we "$power\_on$" the pump, the battery level is full.
+      \item We merged actions "$connect\_set$", "$purge\_air$" and "$lock\_line$" into "$prepare\_line$" to simplify the operations.
+  \end{enumerate}
+
+  \item A high-level overview of your model: what are the main components.
+
+  \bigskip
+  \noindent {\bf Answer:}
+
+  Our model comprises of 4 main components : 
+
+  \begin{enumerate}
+    \item Power system: this component takes care of general state of the pump, which is turning on/off, system running on AC or battery, alarm ringing when the battery is low. We have 1 power system module.
+    \item Line: This component is involved with the dispensing of medicine. There are various actions corresponding to it like blocking, pinching and so on. We have 2 lines running concurrently in our system.
+    \item Alarm System: We divided this into two components :
+    \begin{enumerate}
+      \item Alarm: this component is concerned with the lines and will ring whenever the line is pinched, blocked or done dispensing. We have 2 line alarms running concurrently in our system.
+      \item Power Alarm: This alarm component is concerned with the power system and will ring the battery is low. We have one power alarm in our system.
+    \end{enumerate}
+    \item User Interface: This component is concerned with the instructions given on the pump keypad like setting medicine units, changing rate, locking keypad and more.
+  \end{enumerate}
+
+  \item A structure diagram showing what are the concurrent processes and how  they interact
+
+  \bigskip
+  \noindent {\bf Answer:}
+  
+  \item For each major component a brief description of how it functions
+  \item What aspects of a real pump your model abstracts away from.
+  \item The FSP model of your pump. (Also submit the FSP specification electronically.)
+\end{enumerate}
+
+%___________________________________________________________________________________________________
+\head{Task 2 (32 points): Stating and Checking Properties}
+%___________________________________________________________________________________________________
+
+Once you have your pump specified, consider the following properties. For each say (a) whether the property is a safety or liveness property,  (b) whether your model allows you to check this property, and if
+so show its specification, (c) whether it is true of your model or not, and what features of FSP and LTSA allowed you to check the
+property. It would be particularly helpful if you include in your write-up the specific checks that you performed -- which should also appear in your FSP file. (Note: not all of these properties have to be true of your pump, depending on how you interpret the requirements for an infusion pump.)
+
+\begin{enumerate}
+    \item The pump cannot start pumping without the operator first confirming the settings on the pump.
+    \item Electrical power can fail infinitely often.
+    \item If the backup battery power fails, pumping will not occur on any line.
+    \item It is always possible to resume pumping after a failure.
+    \item An alarm will sound on any line failure (blockage, pinching, empty fluid, or whatever failures you model).
+    \item In the absence of errors the pump will continue to pump until the treatment is finished.
+    \item The system never deadlocks.
+    \item Property A of your choosing.
+    \item Property B of your choosing
+\end{enumerate}
+
+%___________________________________________________________________________________________________
+\head{Task 3 (18 points): Reflection}
+%___________________________________________________________________________________________________
+
+ You have now seen several notations for specifying systems and their properties: Pre-post conditions,
+ Alloy, and FSP (LTSA).  In this part of the report we would like you to reflect on that experience.
+ For each of these notations write a paragraph or two explaining:
+\begin{enumerate}
+ \item What are the strengths of this notation and its tools?  Under what situations would you
+recommend its use? Why?
+ \item What are the weaknesses of this notation and its tools. Under what
+situations would you not recommend its use? Why?
+ \item With respect to this notation, what is
+the single most-important future development that would be needed to make it more generally useful
+to practitioners?
+
+\end{enumerate}
+
+\end{document}
